@@ -18,9 +18,17 @@ function findOffset(obj) {
     }
 }
 
+function clone(o) {
+    for (i in o) {
+        this[i] = o[i];
+    }
+}
+
 function Graphics(canvas){
     this._graphics = new Array();
     this._graphicDrag = undefined;
+    this._mouseX = undefined;
+    this._mouseY = undefined;
     Graphics.canvas = canvas;
     Graphics.ctx = Graphics.canvas.getContext('2d');
     Graphics.pos = findOffset(Graphics.canvas);
@@ -35,6 +43,20 @@ function Graphics(canvas){
 	_instance.onUp(e);
     }
 } 
+
+Graphics.prototype.getMouseX = function(){
+    return this._mouseX;
+}
+Graphics.prototype.setMouseX = function(mouseX){
+    this._mouseX = mouseX;
+}
+
+Graphics.prototype.getMouseY = function(){
+    return this._mouseY;
+}
+Graphics.prototype.setMouseY = function(mouseY){
+    this._mouseY = mouseY;
+}
 
 Graphics.prototype.getGraphicDrag = function(){
     return this._graphicDrag;
@@ -63,7 +85,16 @@ Graphics.prototype.popGraphic = function(graphic){
     if(this.getGraphics() == undefined){
 	return;
     }
-    this.getGraphics().pop(graphic);
+    if(arguments.length == 0){
+	return this.getGraphics().pop();
+    }
+    else if (arguments.length == 1){
+	var index = this.getGraphics().indexOf(arguments[0]);
+	if(index != -1){
+	    this.getGraphics().slice(index, 1);
+	}
+	
+    }
 }
 
 Graphics.prototype.draw = function(){
@@ -82,15 +113,20 @@ Graphics.prototype.onMove = function(e){
     var length = this.getGraphics().length;i
     var x = e.pageX - Graphics.pos.x;
     var y = e.pageY - Graphics.pos.y;
-    if(this.getGraphicDrag() != undefined){
-	this.getGraphicDrag().setX(x);
-	this.getGraphicDrag().setY(y);
+    if(this.getGraphicDrag() != undefined
+	&& (this.getMouseX() != x || this.getMouseY() != y)){
+	var diffX = this.getMouseX() - x;
+	var diffY = this.getMouseY() - y;
+	this.getGraphicDrag().setX(this.getGraphicDrag().getX() - diffX);
+	this.getGraphicDrag().setY(this.getGraphicDrag().getY() - diffY);
 	this.draw();	
     }
+    this.setMouseX(x);
+    this.setMouseY(y);
     for( i=0; i<length; i++){
         var graphic = this.getGraphics(i);
         if(graphic.isDraggable() && graphic.isInPath != undefined && graphic.isInPath(x, y)){
-            Graphics.canvas.style.cursor = "pointer";
+	    Graphics.canvas.style.cursor = "pointer";
 	    return;
         }
     }
@@ -104,6 +140,7 @@ Graphics.prototype.onDown = function(e){
     for( i=0; i<length; i++){
         var graphic = this.getGraphics(i);
         if(graphic.isDraggable() && graphic.isInPath != undefined && graphic.isInPath(x, y)){
+            graphic.drag();
 	    this.setGraphicDrag(graphic);
 	    logger.info("startDrag");
 	    return;
@@ -112,6 +149,9 @@ Graphics.prototype.onDown = function(e){
 }
 
 Graphics.prototype.onUp = function(e){
+    if(this.getGraphicDrag() != undefined){
+	this.getGraphicDrag().drop(e, this);
+    }
     this.setGraphicDrag(undefined); 
     logger.info("stop Drag");
 }
@@ -123,8 +163,46 @@ function Graphic(x, y){
     this._color = undefined;
     this._borderWidth = undefined;
     this._borderColor = undefined;
-    this._hover = false;
     this._draggable = false;
+    this._state = new Array();
+}
+
+Graphic.prototype.drag = function(){
+    var copy = new clone(this);
+    this.pushState(copy);
+}
+
+Graphic.prototype.drop = function(){
+    var copy = this.popState();
+    logger.info("drop, changeX => "+ copy.getX());
+    logger.info("drop, changeY => "+ copy.getY());
+    this.setX(copy.getX());
+    this.setY(copy.getY());
+    arguments[1].draw();
+}
+
+Graphic.prototype.getState = function(){
+    return this._state;
+}
+Graphic.prototype.pushState = function(state){
+    if(this._state == undefined){
+	this._state = new Array();
+    }
+    this._state.push(state);
+}
+Graphic.prototype.popState = function(){
+    if(this.getState() == undefined){
+	return;
+    }
+    if(arguments.length == 0){
+	return this.getState().pop();
+    }
+    else if (arguments.length == 1){
+	var index = this.getState().indexOf(arguments[0]);
+	if(index != -1){
+	    this.getState().slice(index, 1);
+	}
+   } 
 }
 
 Graphic.prototype.getColor = function(){
@@ -160,13 +238,6 @@ Graphic.prototype.getBorderWidth = function(){
 }
 Graphic.prototype.setBorderWidth = function(borderWidth){
     this._borderWidth = borderWidth;
-}
-
-Graphic.prototype.isHover = function(){
-    return this._hover;
-}
-Graphic.prototype.setHover = function(hover){
-    this._hover = hover;
 }
 
 Graphic.prototype.isDraggable = function(){
@@ -242,7 +313,11 @@ Rectangle.prototype.isInPath = function(x, y){
 	return true;
     }
     return false; 
-i}
+
+}
+Rectangle.prototype.drop = function(){
+    this.popState();
+}
 
 function Circle(x, y, width){
     Graphic.call(this, x, y);
@@ -268,3 +343,11 @@ Circle.prototype.draw = function(){
     Graphics.ctx.fill();
     Graphics.ctx.stroke();
 }
+
+Circle.prototype.isInPath = function(x, y){
+    if (x >= this.getX() - this.getWidth()  && x <= this.getX() +this.getWidth() 
+	&& y >= this.getY() - this.getWidth() && y <= this.getY() + this.getWidth()){
+	return true;
+    }
+    return false; 
+i}
