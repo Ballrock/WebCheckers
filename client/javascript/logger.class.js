@@ -2,22 +2,21 @@
 
 function Logger()
 {
-    if (arguments.callee.instance)
-        return arguments.callee.instance;
-    arguments.callee.instance = this;
-    this.level = undefined;
-    var test=2;
+    if (arguments.callee._instance)
+        return arguments.callee._instance;
+    arguments.callee._instance = this;
+    this._level = Enum.Logger.OFF;
 }
 
-Logger.prototype.set_level = function(_level){
-    this.level = _level;
+Logger.prototype.setLevel = function(level){
+    this._level = level;
 }
-Logger.prototype.get_level = function(){
-    return this.level;
+Logger.prototype.getLevel = function(){
+    return this._level;
 }
 
 Logger.prototype.log = function(message, priority){
-    if(priority >= this.get_level()){
+    if(priority >= this.getLevel()){
         console.log(message);
     }
 }
