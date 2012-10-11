@@ -35,14 +35,35 @@ function Graphics(canvas) {
     this._graphicDrag = undefined;
     this._mouseX = undefined;
     this._mouseY = undefined;
-    Graphics.canvas = canvas;
-    Graphics.ctx = Graphics.canvas.getContext('2d');
-    Graphics.pos = findOffset(Graphics.canvas);
+    this._canvas = canvas;
+    this._ctx = canvas.getContext('2d');
+    this._pos = findOffset(canvas);
     var _instance = this;
-    Graphics.canvas.onmousemove = function (e) { _instance.onMove(e); };
-    Graphics.canvas.onmousedown = function (e) { _instance.onDown(e); };
-    Graphics.canvas.onmouseup = function (e) { _instance.onUp(e); };
+    canvas.onmousemove = function (e) { _instance.onMove(e); };
+    canvas.onmousedown = function (e) { _instance.onDown(e); };
+    canvas.onmouseup = function (e) { _instance.onUp(e); };
 }
+
+Graphics.prototype.getPos = function () {
+    return this._pos;
+};
+Graphics.prototype.setPos = function (pos) {
+    this._pos = pos;
+};
+
+Graphics.prototype.getCtx = function () {
+    return this._ctx;
+};
+Graphics.prototype.setCtx = function (ctx) {
+    this._ctx = ctx;
+};
+
+Graphics.prototype.getCanvas = function () {
+    return this._canvas;
+};
+Graphics.prototype.setCanvas = function (canvas) {
+    this._canvas = canvas;
+};
 
 Graphics.prototype.getMouseX = function () {
     return this._mouseX;
@@ -92,9 +113,13 @@ Graphics.prototype.popGraphic = function (i) {
     }
 };
 
+Graphics.prototype.fireDraw = function () {
+    this.draw();
+};
+
 Graphics.prototype.draw = function () {
-    Graphics.ctx.fillStyle = "#ffffff";
-    Graphics.ctx.clearRect(0, 0, Graphics.canvas.width, Graphics.canvas.height);
+    this.getCtx().fillStyle = "#ffffff";
+    this.getCtx().clearRect(0, 0, this.getCanvas().width, this.getCanvas().height);
     var length = this.getGraphics().length, i, graphic;
     for (i = 0; i < length; i = i + 1) {
         graphic = this.getGraphics(i);
@@ -105,34 +130,32 @@ Graphics.prototype.draw = function () {
 };
 
 Graphics.prototype.onMove = function (e) {
-    var x, y, diffX, diffY, length, i, graphic;
+    var x, y, newX, newY, length, i, graphic;
     length = this.getGraphics().length;
-    x = e.pageX - Graphics.pos.x;
-    y = e.pageY - Graphics.pos.y;
+    x = e.pageX - this.getPos().x;
+    y = e.pageY - this.getPos().y;
     if (this.getGraphicDrag() !== undefined && (this.getMouseX() !== x || this.getMouseY() !== y)) {
-        diffX = this.getMouseX() - x;
-        diffY = this.getMouseY() - y;
-        this.getGraphicDrag().setX(this.getGraphicDrag().getX() - diffX);
-        this.getGraphicDrag().setY(this.getGraphicDrag().getY() - diffY);
-        this.draw();
+        newX = this.getGraphicDrag().getX() - (this.getMouseX() - x);
+        newY = this.getGraphicDrag().getY() - (this.getMouseY() - y);
+        this.getGraphicDrag().moveTo(newX, newY);
     }
     this.setMouseX(x);
     this.setMouseY(y);
     for (i = 0; i < length; i = i + 1) {
         graphic = this.getGraphics(i);
         if (graphic.isDraggable() && graphic.isInPath !== undefined && graphic.isInPath(x, y)) {
-            Graphics.canvas.style.cursor = "pointer";
+            this.getCanvas().style.cursor = "pointer";
             return;
         }
     }
-    Graphics.canvas.style.cursor = "default";
+    this.getCanvas().style.cursor = "default";
 };
 
 Graphics.prototype.onDown = function (e) {
     var length, x, y, graphic, i;
     length = this.getGraphics().length;
-    x = e.pageX - Graphics.pos.x;
-    y = e.pageY - Graphics.pos.y;
+    x = e.pageX - this.getPos().x;
+    y = e.pageY - this.getPos().y;
     for (i = 0; i < length; i = i + 1) {
         graphic = this.getGraphics(i);
         if (graphic.isDraggable() && graphic.isInPath !== undefined && graphic.isInPath(x, y)) {
@@ -146,14 +169,15 @@ Graphics.prototype.onDown = function (e) {
 
 Graphics.prototype.onUp = function (e) {
     if (this.getGraphicDrag() !== undefined) {
-        this.getGraphicDrag().drop(e, this);
+        this.getGraphicDrag().drop(e);
     }
     this.setGraphicDrag(undefined);
     logger.info("stop Drag");
 };
 
 // Classes des functions graphiques
-function Graphic(x, y) {
+function Graphic(graphics, x, y) {
+    this._graphics = graphics;
     this._x = x;
     this._y = y;
     this._color = undefined;
@@ -162,6 +186,12 @@ function Graphic(x, y) {
     this._draggable = false;
     this._state = [];
 }
+
+Graphic.prototype.moveTo = function (newX, newY) {
+    this.setX(newX);
+    this.setY(newY);
+    this.getGraphics().fireDraw();
+};
 
 Graphic.prototype.drag = function () {
     var copy = new Clone(this);
@@ -172,7 +202,7 @@ Graphic.prototype.drop = function (e, graphics) {
     var copy = this.popState();
     this.setX(copy._x);
     this.setY(copy._y);
-    graphics.draw();
+    this.getGraphics().fireDraw(); 
 };
 
 Graphic.prototype.getState = function () {
@@ -195,6 +225,13 @@ Graphic.prototype.popState = function (i) {
     if (index !== -1) {
         this.getState().slice(index, 1);
     }
+};
+
+Graphic.prototype.getGraphics = function () {
+    return this._graphics;
+};
+Graphic.prototype.setGraphics = function (graphics) {
+    this._graphics = graphics;
 };
 
 Graphic.prototype.getColor = function () {
@@ -241,19 +278,19 @@ Graphic.prototype.setDraggable = function (draggable) {
 
 Graphic.prototype.initDraw = function () {
     if (this.getColor() !== undefined && this.getColor() !== null) {
-        Graphics.ctx.fillStyle = this.getColor();
+        this.getGraphics().getCtx().fillStyle = this.getColor();
     } else {
-        Graphics.ctx.fillStyle = Graphic.defaultColor;
+        this.getGraphics().getCtx().fillStyle = Graphic.defaultColor;
     }
     if (this.getBorderColor() !== undefined && this.getBorderColor() !== null) {
-        Graphics.ctx.strokeStyle = this.getBorderColor();
+        this.getGraphics().getCtx().strokeStyle = this.getBorderColor();
     } else {
-        Graphics.ctx.strokeStyle = Graphic.defaultBorderColor;
+        this.getGraphics().getCtx().strokeStyle = Graphic.defaultBorderColor;
     }
     if (this.getBorderWidth() !== undefined && this.getBorderWidth() !== null) {
-        Graphics.ctx.lineWidth = this.getBorderWidth();
+        this.getGraphics().getCtx().lineWidth = this.getBorderWidth();
     } else {
-        Graphics.ctx.lineWidth = Graphic.defaultBorderWidth;
+        this.getGraphics().getCtx().lineWidth = Graphic.defaultBorderWidth;
     }
 };
 
@@ -265,8 +302,8 @@ Graphic.defaultBorderWidth = 1;
 Graphic.defaultBorderColor = "#000000";
 Graphic.defaultColor = "#ffffff";
 
-function Rectangle(x, y, width, height) {
-    Graphic.call(this, x, y);
+function Rectangle(graphics, x, y, width, height) {
+    Graphic.call(this, graphics, x, y);
     this._height = height;
     this._width = width;
 }
@@ -287,13 +324,13 @@ Rectangle.prototype.setHeight = function (height) {
 };
 
 Rectangle.prototype.draw = function () {
-    if (Graphics.ctx === undefined || Graphics.ctx === null) {
+    if (this.getGraphics().getCtx() === undefined || this.getGraphics().getCtx() === null) {
         return;
     }
     this.initDraw();
     logger.trace("Rectangle.draw");
-    Graphics.ctx.fillRect(this.getX(), this.getY(), this.getWidth(), this.getHeight());
-    Graphics.ctx.strokeRect(this.getX(), this.getY(), this.getWidth(), this.getHeight());
+    this.getGraphics().getCtx().fillRect(this.getX(), this.getY(), this.getWidth(), this.getHeight());
+    this.getGraphics().getCtx().strokeRect(this.getX(), this.getY(), this.getWidth(), this.getHeight());
 };
 
 Rectangle.prototype.isInPath = function (x, y) {
@@ -307,8 +344,8 @@ Rectangle.prototype.drop = function () {
     this.popState();
 };
 
-function Circle(x, y, width) {
-    Graphic.call(this, x, y);
+function Circle(graphics, x, y, width) {
+    Graphic.call(this, graphics, x, y);
     this._width = width;
 }
 _extends(Circle, Graphic);
@@ -321,15 +358,15 @@ Circle.prototype.setWidth = function (width) {
 };
 
 Circle.prototype.draw = function () {
-    if (Graphics.ctx === undefined || Graphics.ctx === null) {
+    if (this.getGraphics().getCtx() === undefined || this.getGraphics().getCtx() === null) {
         return;
     }
     this.initDraw();
     logger.trace("Circle.draw");
-    Graphics.ctx.beginPath();
-    Graphics.ctx.arc(this.getX(), this.getY(), this.getWidth(), 0, 2 * Math.PI);
-    Graphics.ctx.fill();
-    Graphics.ctx.stroke();
+    this.getGraphics().getCtx().beginPath();
+    this.getGraphics().getCtx().arc(this.getX(), this.getY(), this.getWidth(), 0, 2 * Math.PI);
+    this.getGraphics().getCtx().fill();
+    this.getGraphics().getCtx().stroke();
 };
 
 Circle.prototype.isInPath = function (x, y) {
