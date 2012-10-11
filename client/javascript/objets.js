@@ -23,8 +23,10 @@ function findOffset(obj) {
 
 function Clone(o) {
     var i;
-    for (i = 0; i < o.length; i = i + 1) {
-        this[i] = o[i];
+    for (i in o) {
+        if (o.hasOwnProperty(i)) {
+            this[i] = o[i];
+        }
     }
 }
 
@@ -166,12 +168,10 @@ Graphic.prototype.drag = function () {
     this.pushState(copy);
 };
 
-Graphic.prototype.drop = function (graphics) {
+Graphic.prototype.drop = function (e, graphics) {
     var copy = this.popState();
-    logger.info("drop, changeX => " + copy.getX());
-    logger.info("drop, changeY => " + copy.getY());
-    this.setX(copy.getX());
-    this.setY(copy.getY());
+    this.setX(copy._x);
+    this.setY(copy._y);
     graphics.draw();
 };
 
